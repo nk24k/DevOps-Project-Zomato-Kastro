@@ -146,6 +146,11 @@ pipeline {
         jdk 'jdk17'
         nodejs 'node23'
     }
+//     tools {
+//     jdk 'jdk17'
+//     nodejs 'node18'
+// }
+    
     environment {
         SCANNER_HOME=tool 'sonar-scanner'
     }
@@ -157,7 +162,7 @@ pipeline {
         }
         stage ("Git Checkout") {
             steps {
-                git 'https://github.com/KastroVKiran/Zomato-Project-Kastro.git'
+                git 'https://github.com/nk24k/DevOps-Project-Zomato-Kastro.git'
             }
         }
         stage("Sonarqube Analysis"){
@@ -171,7 +176,7 @@ pipeline {
         stage("Code Quality Gate"){
            steps {
                 script {
-                    waitForQualityGate abortPipeline: false, credentialsId: 'Sonar-token' 
+                    waitForQualityGate abortPipeline: false, credentialsId: 'Sonar-token'
                 }
             } 
         }
@@ -180,10 +185,35 @@ pipeline {
                 sh "npm install"
             }
         }
-        stage('OWASP FS SCAN') {
-            steps {
-                dependencyCheck additionalArguments: '--scan ./ --disableYarnAudit --disableNodeAudit -n', odcInstallation: 'DP-Check'
-                dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
+        
+        
+//         stage("Install NPM Dependencies") {
+//     steps {
+//         sh "npm install"
+//         sh "npm audit fix || true"
+//     }
+// }
+
+
+      stage('OWASP FS SCAN') {
+    steps {
+        sh 'mkdir -p reportsmohan'
+
+        dependencyCheck(
+            odcInstallation: 'DP-Check',
+            nvdCredentialsId: 'nvd-api-key',
+            additionalArguments: '''
+                --scan ./
+                --out reportsmohan
+                --format HTML
+                --format XML
+                --disableYarnAudit
+                --disableNodeAudit
+                --disableAssembly
+            '''
+        )
+
+        dependencyCheckPublisher pattern: '**/dependency-check-report.xml'
     }
 }
         stage ("Trivy File Scan") {
@@ -191,8 +221,18 @@ pipeline {
                 sh "trivy fs . > trivy.txt"
             }
         }
+        
+        
+//         stage ("Trivy File Scan") {
+//     steps {
+//         sh "trivy fs --skip-files reportsmohan . > trivy.txt"
+//     }
+// }
+
+
         stage ("Build Docker Image") {
             steps {
+                sh "docker rm -f zomato || true"
                 sh "docker build -t zomato ."
             }
         }
@@ -200,8 +240,8 @@ pipeline {
             steps {
                 script {
                     withDockerRegistry(credentialsId: 'docker') {
-                        sh "docker tag zomato kastrov/zomato:latest "
-                        sh "docker push kastrov/zomato:latest "
+                        sh "docker tag zomato kidmohan/zomato:latest "
+                        sh "docker push kidmohan/zomato:latest "
                     }
                 }
             }
@@ -209,17 +249,17 @@ pipeline {
         stage('Docker Scout Image') {
             steps {
                 script{
-                   withDockerRegistry(credentialsId: 'docker', toolName: 'docker'){
-                       sh 'docker-scout quickview kastrov/zomato:latest'
-                       sh 'docker-scout cves kastrov/zomato:latest'
-                       sh 'docker-scout recommendations kastrov/zomato:latest'
+                   withDockerRegistry(credentialsId: 'docker'){
+                       sh 'docker scout quickview kidmohan/zomato:latest'
+                       sh 'docker scout cves kidmohan/zomato:latest'
+                       sh 'docker scout recommendations kidmohan/zomato:latest'
                    }
                 }
             }
         }
         stage ("Deploy to Container") {
             steps {
-                sh 'docker run -d --name zomato -p 3000:3000 kastrov/zomato:latest'
+                sh 'docker run -d --name zomato -p 3000:3000 kidmohan/zomato:latest'
             }
         }
     }
@@ -242,13 +282,12 @@ pipeline {
                 </body>
                 </html>
             """,
-            to: 'kastrokiran@gmail.com',
+            to: 'mohan4442004@gmail.com',
             mimeType: 'text/html',
             attachmentsPattern: 'trivy.txt'
         }
     }
 }
-
 
 
 If the build stage of "OWASP FS SCAN" shows 'UNSTABLE BUILD' replace the below script in OWASP FS SCAN stage
